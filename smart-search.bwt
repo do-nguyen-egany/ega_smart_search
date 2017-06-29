@@ -1,0 +1,320 @@
+<div id='search_suggestion'>
+    <div id='search_top'>
+        <div id="product_results"></div>
+        <div id="article_results"></div>
+    </div>
+    <div id='search_bottom'>
+        <a class='show_more' href='#'>Hiển thị tất cả kết quả cho "<span></span>"</a>
+    </div>
+</div>
+<style>
+    #search_suggestion { padding: 0 0 10px 0;	color: #555; position: absolute; top: 0; z-index: 9999;
+        min-width: 300px; max-width: 600px; background-color: #f8f8f8; display: none;	}
+    #search_suggestion h3 { margin: 0; font-size: 16px;	font-weight: bold; background-color: #eaeaea; padding: 5px; }
+    #search_suggestion ul { padding: 0; }
+    #search_suggestion ul li { background-color: #fff; padding: 5px; font-size: 14px; }
+    #search_suggestion ul li:hover { background-color: #f2f2f2;	}
+    #search_suggestion ul li a { color: #787878; display: block; overflow: hidden; }
+    #search_suggestion ul li .item_image {
+        text-align: center; float: left; width: 100px; margin-right: 5px;
+        margin-top: 10px;
+
+    }
+    #search_suggestion ul li .item_image img{
+        max-width: 100%;
+
+    }
+    #search_suggestion ul li .item_detail { overflow: hidden; }
+    #search_suggestion ul li .item_title h4 { text-transform: none; font-size: 14px; font-weight: bold; margin-bottom: 0; }
+    #search_suggestion ul li .item_price ins { font-weight: bold;	text-decoration: none; display: inline-block;
+        margin-right: 5px; }
+    #search_top { max-height: 400px; overflow-y: auto; }
+    #search_bottom { text-align: center; padding-top: 10px; }
+    #search_bottom a { color: #444; text-decoration: underline; font-weight: bold; }
+    #search_bottom a span { color: #ff0000; }
+
+</style>
+
+<script>
+    //"use_strict";
+    require(['jquery','Rx'],function ($,Rx) {
+
+        var settings = {
+            searchArticle: "{% if settings.display_suggest_search_article %}{{ '1' }}{% else %}{{ '0' }}{% endif %}",
+            articleLimit: {{ settings.suggest_result_count }},
+            productLimit: {{ settings.suggest_result_count }},
+            showDescription: "{% if settings.display_suggest_search_description %}{{ '1' }}{% else %}{{ '0' }}{% endif %}"
+        };
+        var suggestionWrap = document.getElementById('search_suggestion');
+        var searchTop = document.getElementById('search_top');
+        var productResults = document.getElementById('product_results');
+        var articleResults = document.getElementById('article_results');
+        var searchBottom = document.getElementById('search_bottom');
+        var isArray = function(a) {
+            return Object.prototype.toString.call(a) === "[object Array]";
+        }
+        var createEle = function(desc) {
+            if (!isArray(desc)) {
+                return createEle.call(this, Array.prototype.slice.call(arguments));
+            }
+            var tag = desc[0];
+            var attributes = desc[1];
+            var el = document.createElement(tag);
+            var start = 1;
+            if (typeof attributes === "object" && attributes !== null && !isArray(attributes)) {
+                for (var attr in attributes) {
+                    el[attr] = attributes[attr];
+                }
+                start = 2;
+            }
+            for (var i = start; i < desc.length; i++) {
+                if (isArray(desc[i])) {
+                    el.appendChild(createEle(desc[i]));
+                }
+                else {
+                    el.appendChild(document.createTextNode(desc[i]));
+                }
+            }
+            return el;
+        }
+        var loadResult = function(data, type) {
+
+            if(type==='product')
+            {
+                productResults.innerHTML = '';
+            }
+            if(type==='article')
+            {
+                articleResults.innerHTML = '';
+            }
+
+            var articleLimit = parseInt(settings.articleLimit);
+            var productLimit = parseInt(settings.productLimit);
+            var showDescription = settings.showDescription;
+            //console.log(data);
+            if(data.indexOf('<iframe') > -1) {
+                data = data.substr(0, (data.indexOf('<iframe') - 1))
+            }
+            var dataJson = JSON.parse(data);
+            if(dataJson.results !== undefined)
+            {
+                var resultList = [];
+                searchTop.style.display = 'block';
+                if(type === 'product') {
+                    productResults.innerHTML = ''
+                    productLimit = Math.min(dataJson.results.length, productLimit);
+                    for(var i = 0; i < productLimit; i++) {
+                        resultList[i] = dataJson.results[i];
+                    }
+                }
+                else {
+                    articleResults.innerHTML = '';
+                    articleLimit = Math.min(dataJson.results.length, articleLimit);
+                    for(var i = 0; i < articleLimit; i++) {
+                        resultList[i] = dataJson.results[i];
+                    }
+                }
+                var searchTitle = 'Sản phẩm'
+                if(type === 'article') {
+                    searchTitle = 'Bài viết';
+                }
+                var searchHeading = createEle(['h3', searchTitle]);
+                var searchList = document.createElement('ul');
+                resultList.forEach(function(item, index) {
+                    var priceDiv = '';
+                    var descriptionDiv = '';
+                    if(type == 'product') {
+                        if(item.price_contact) {
+                            priceDiv = ['div', {className: 'item_price'},
+                                ['ins', item.price_contact]
+                            ];
+                        }
+                        else {
+                            if(item.price_from) {
+                                priceDiv = ['div', {className: 'item_price'},
+                                    ['span', 'Từ '],
+                                    ['ins', item.price_from]
+                                ];
+                            }
+                            else {
+                                priceDiv = ['div', {className: 'item_price'},
+                                    ['ins', parseFloat(item.price)  ? item.price : 'Liên hệ']
+                                ];
+                            }
+                        }
+
+                        if(item.compare_at_price !== undefined) {
+                            priceDiv.push(['del', item.compare_at_price]);
+                        }
+                    }
+                    if(showDescription == '1') {
+                        descriptionDiv = ['div', {className: 'item_description'}, item.description]
+                    }
+                    var searchItem = createEle(
+                        ['li',
+                            ['a', {href: item.url},
+                                ['div', {className: 'item_image'},
+                                    ['img', {src: item.thumbnail}]
+                                ],
+                                ['div', {className: 'item_detail'},
+                                    ['div', {className: 'item_title'},
+                                        ['h4', item.title]
+                                    ],
+                                    priceDiv, descriptionDiv
+                                ]
+                            ]
+                        ]
+                    )
+                    searchList.appendChild(searchItem);
+                })
+                if(type === 'product') {
+                    productResults.innerHTML = ''; //new
+                    productResults.appendChild(searchHeading);
+                    productResults.appendChild(searchList);
+                }
+                else {
+                    articleResults.innerHTML = ''; //new
+                    articleResults.appendChild(searchHeading);
+                    articleResults.appendChild(searchList);
+                }
+            }
+            else
+            {
+                if(type !== 'product' && false)
+                {
+                    searchTop.style.display = 'none'
+                }
+                //searchTop.style.display = 'none'
+            }
+        }
+        var loadAjax = function(q) {
+            if(settings.searchArticle === '1') {
+                loadArticle(q);
+            }
+            loadProduct(q);
+        }
+        var loadProduct = function(q) {
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if(this.readyState == 4 && this.status == 200) {
+                    loadResult(this.responseText, 'product')
+                }
+            }
+            xhttp.open('GET', '/search?type=product&q=' + q + '&view=json', true);
+            xhttp.send();
+        }
+        var loadArticle = function(q) {
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if(this.readyState == 4 && this.status == 200) {
+                    loadResult(this.responseText, 'article')
+                }
+            }
+            xhttp.open('GET', '/search?type=article&q=' + q + '&view=json', true);
+            xhttp.send();
+        }
+        var searchForm = document.querySelectorAll('form[action="/search"]');
+        var getPos = function(el) {
+            for (var lx=0, ly=0; el != null; lx += el.offsetLeft, ly += el.offsetTop, el = el.offsetParent);
+            return {x: lx,y: ly};
+        }
+        var initSuggestion = function(el) {
+
+            var parentTop = el.offsetParent.offsetTop;
+            var position = getPos(el);
+            var searchInputHeight = el.offsetHeight;
+            var searchInputWidth = el.offsetWidth - 30;
+            var searchInputX = position.x;
+            var searchInputY = position.y;
+            var suggestionPositionX = searchInputX;
+            var suggestionPositionY = searchInputY + searchInputHeight;
+            suggestionWrap.style.left = suggestionPositionX + 'px';
+            suggestionWrap.style.top = suggestionPositionY + 'px';
+            suggestionWrap.style.width = searchInputWidth + 'px';
+        }
+        window.__q__ = '';
+        var loadAjax2 = function (q) {
+
+            if(settings.searchArticle === '1') {
+                //loadArticle(q);
+//                return $.ajax({
+//                    url: '/search?type=article&q=' + q + '&view=json',
+//                    type:'GET'
+//                }).promise();
+            }
+           //load product
+            window.__q__ = q;
+            return $.ajax({
+                url: '/search?type=product&q=' + q + '&view=json',
+                type:'GET'
+            }).promise();
+        };
+
+
+        if(searchForm.length > 0) {
+            searchForm.forEach(function(form, i) {
+                var searchInput = form.querySelector('[name=query]');
+//                searchInput.addEventListener('keyup', function() {
+//                    // locate search suggestion div
+//                    initSuggestion(this);
+//                    // Search processing
+//                    var q = this.value;
+//                    if(q === '' || q === null) {
+//                        suggestionWrap.style.display = 'none';
+//                    }
+//                    else {
+//                        suggestionWrap.style.display = 'block';
+//                        setTimeout(function(){
+//                            loadAjax(q);
+//                        },800);
+//                        // show all search results
+//                        var showMore = searchBottom.getElementsByClassName('show_more')[0];
+//                        showMore.setAttribute('href', '/search?q=' + q);
+//                        showMore.querySelector('span').innerHTML = q;
+//                    }
+//                })
+                var keyup = Rx.Observable.fromEvent(searchInput, 'keyup')
+                    .map(function (e) {
+                        var __q = e.target.value;
+                        initSuggestion(e.target);
+                        if(__q === '' || __q === null) {
+                            suggestionWrap.style.display = 'none';
+                        }
+                        else{
+                            suggestionWrap.style.display = 'block';
+                            var showMore = searchBottom.getElementsByClassName('show_more')[0];
+                            showMore.setAttribute('href', '/search?q=' + __q);
+                            showMore.querySelector('span').innerHTML = __q;
+                        }
+
+                        return e.target.value;
+                    })
+                    .filter(function (text) {
+
+                        return text.length > 0;
+                    })
+                    .debounce(300  )
+                    .distinctUntilChanged();
+                var searcher = keyup.flatMapLatest(loadAjax2);
+                searcher.subscribe(
+                    function (data) {
+                        loadResult(data, 'product');
+                        if(settings.searchArticle === '1') {
+                            loadArticle(window.__q__);
+                        }
+//                        $results
+//                            .empty()
+//                            .append ($.map(data[1], function (v) { return $('<li>').text(v); }));
+                    },
+                    function (error) {
+
+                    });
+
+            })
+        }
+        window.addEventListener('click', function() {
+            suggestionWrap.style.display = 'none';
+        });
+    });
+
+</script>
